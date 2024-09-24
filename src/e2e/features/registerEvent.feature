@@ -6,12 +6,12 @@ Feature: Event Registration
     Given I am on the events hub page
     Then I should see the Marquee displayed on the page
     Then I should see events displayed on the page
+    Then I should see the total number of pages and results displayed
     Then I should see pagination controls
     And the "Next" button should be clickable
     And the "Previous" button should be clickable
     And I should be able to click on specific page numbers
-    And I should see the total number of pages and results displayed
-
+    
   Scenario Outline: Validate and register events
     Given I am on the events hub page
     When I select the event card with title "<EventName>"
@@ -24,19 +24,18 @@ Feature: Event Registration
     And I should see the Agenda on the event details page
     And I should see profile cards for speakers and host
     And I verify the CTA in the related products blade
-    #And I verify the partners section
+    And I verify the partners section
 
     Then I initiate the RSVP process and handle sign-in if required
     Then I should see the event title I clicked on
-    #And I should see my email prefilled
-    #Then I fill all required informationinformation
-    # When I check the Terms and Conditions
-    #Then I click the Submit information
-    #Then I see the registration confirmation
-    #Then I close the confirmation
+    And I should see my email prefilled
+    Then I fill all the required information with <FormData>
+    When I check the Terms and Conditions
+    Then I click the Submit button
+    Then I see the registration confirmation
+    Then I cancel the RSVP
 
   Examples: DefaultEvents
-  | EventName             |
-  | E2E Event 2           |
-  | PixelArt Expo         |
-  | Create Now Pittsburgh |
+    | EventName                | FormData                                              |
+    | Auto Events Demo         | '{"companyName": "Test Company 1", "jobTitle": "Other", "phoneNumber": "1234567890", "industry": "Advertising", "interest": "Creative Cloud", "companySize": "10-49", "ageRange": "26-35", "jobLevel": "Manager", "contactMethod":"email"}' |
+    

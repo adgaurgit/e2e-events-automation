@@ -1,5 +1,7 @@
 const { EventsBasePage } = require('./eventsBase.page.js');
 const { expect } = require('@playwright/test');
+const Logger = require('../common-utils/logger.js');
+const logger = new Logger();
 
 class EventsHubPage extends EventsBasePage {
   constructor() {
@@ -30,21 +32,93 @@ class EventsHubPage extends EventsBasePage {
       const element = await this.native.waitForSelector(elementLocator);
       const isVisible = await element.isVisible();
       expect(isVisible).toBe(true);
+      return true;
     } catch (error) {
-      throw new Error(`Element located by ${elementLocator} was not visible: ${error.message}`);
+      console.error(`Element located by ${elementLocator} was not visible within ${timeout} ms: ${error.message}`);
+      return false;
     }
   }
 
-  // async verifyMarquee() {
-  //   const marqueElement = await this.native.waitForSelector(this.locators.marquee);
-  //   expect(await marqueElement.isVisible()).toBeTruthy();
-  // }
-
   async verifyEventsDisplayed() {
-    await this.native.waitForSelector(this.locators.cardsWrapper);
-    const cards = await this.native.locator(this.locators.eventCards);
-    const count = await cards.count();
-    expect(count).toBeGreaterThan(0);
+    try {
+      await this.native.waitForSelector(this.locators.cardsWrapper);
+      const cards = await this.native.locator(this.locators.eventCards);
+      const count = await cards.count();
+      if (count > 0) {
+        logger.logInfo(`${count} events are shown on the first page of the Events Hub.`);
+        return true;
+      } else {
+        logger.logError('No events displayed on the Events Hub first page');
+        return false;
+      }
+    } catch (error) {
+      logger.logError(`Error verifying events displayed: ${error.message}`);
+      return false;
+    }
+  }
+
+  async verifyButtonIsClickable(buttonType, buttonSelector) {
+    try {
+      const button = await this.native.locator(buttonSelector);
+      await button.waitFor({ state: 'visible' });
+      expect(await button.isEnabled()).toBeTruthy();
+      logger.logInfo(`The "${buttonType}" button is clickable.`);
+    } catch (error) {
+      logger.logError(`The "${buttonType}" button is not clickable: ${error.message}`);
+      throw new Error(`The button with selector "${buttonSelector}" is not clickable.`);
+    }
+  }
+
+  async verifyPageNumbersClickable() {
+    try {
+      const paginationItems = this.native.locator(`${this.locators.paginationSelector} li button`);
+      const count = await paginationItems.count();
+
+      if (count === 0) {
+        logger.logError("No pagination buttons found inside")
+        throw new Error(`No pagination buttons found inside ${paginationSelector}.`);
+      }
+
+      logger.logInfo(`Found ${count} pagination buttons.`);
+      for (let i = 0; i < count; i++) {
+        const pageButton = paginationItems.nth(i);
+        await pageButton.waitFor({ state: 'visible' });
+        expect(await pageButton.isEnabled()).toBeTruthy();
+        console.log(`Pagination button ${i + 1} is clickable.`);
+      }
+
+    } catch (error) {
+      logger.logError(`Error occured while pagination button verification: ${error.message}`);
+      throw new Error(`Failed to verify pagination buttons.`);
+    }
+  }
+
+  async verifyTotalPagesAndResults() {
+    try {
+      await this.native.waitForSelector(this.locators.paginationSummarySelector);
+
+      const childElement = await this.native.locator(`${this.locators.paginationSummarySelector} > *`);
+      const summaryText = await childElement.textContent();
+
+      const match = summaryText.match(/(\d+)\s*-\s*(\d+)\s*of\s*(\d+)\s*results/);
+
+      if (!match) {
+        logger.error(`Pagination summary does not match expected format. Found: "${summaryText}".`)
+        throw new Error(`Pagination summary does not match expected format.`);
+      }
+
+      const [_, start, end, total] = match.map(Number);
+
+      if (start > end || end > total) {
+        logger.logError(`Pagination summary numbers are out of range. Summary: "${summaryText}".`)
+        throw new Error(`Pagination summary numbers are out of range.`);
+      }
+
+      logger.logInfo(`Pagination summary is correct: ${summaryText}`);
+    } catch (error) {
+      logger.logError(`Error occured while total pages and results verification: ${error.message}`);
+      throw new Error(`Failed to verify total pages and results: ${error.message}`);
+    }
   }
 
   async viewEventByTitle(eventTitle) {
@@ -55,35 +129,34 @@ class EventsHubPage extends EventsBasePage {
       await eventCard.waitFor({ state: 'visible' });
       const viewEventLink = eventCard.locator(this.locators.viewEventLink);
       expect(await viewEventLink.isVisible()).toBeTruthy();
-      console.log(`Event Card with title ${eventTitle} is present`)
+      logger.logInfo(`Event Card with title ${eventTitle} is present`)
 
     } catch (error) {
-      console.error(`Failed to view event with title "${eventTitle}":`, error.message);
+      logger.logError(`Failed to view event with title "${eventTitle}": ${error.message}`);
       throw new Error(`Could not view event card with title "${eventTitle}".`);
     }
   }
 
-  async getEventTitleBySequence(sequenceNumber) {
-    try {
-      const eventCards = this.native.locator(this.locators.eventCards);
-      const eventCard = eventCards.nth(sequenceNumber - 1);
+  // async getEventTitleBySequence(sequenceNumber) {
+  //   try {
+  //     const eventCards = this.native.locator(this.locators.eventCards);
+  //     const eventCard = eventCards.nth(sequenceNumber - 1);
 
-      await eventCard.waitFor({ state: 'visible' });
+  //     await eventCard.waitFor({ state: 'visible' });
 
-      const titleElement = eventCard.locator(this.locators.eventTitle);
-      await titleElement.waitFor({ state: 'visible' });
+  //     const titleElement = eventCard.locator(this.locators.eventTitle);
+  //     await titleElement.waitFor({ state: 'visible' });
 
-      const titleText = await titleElement.innerText();
-      console.log(`Event Card at position ${sequenceNumber} has title: "${titleText}"`);
+  //     const titleText = await titleElement.innerText();
+  //     console.log(`Event Card at position ${sequenceNumber} has title: "${titleText}"`);
 
-      return titleText;
+  //     return titleText;
 
-    } catch (error) {
-      console.error(`Failed to view event card at position "${sequenceNumber}":`, error.message);
-      throw new Error(`Could not select or click on the event card at position "${sequenceNumber}".`);
-    }
-  }
-
+  //   } catch (error) {
+  //     console.error(`Failed to view event card at position "${sequenceNumber}":`, error.message);
+  //     throw new Error(`Could not select or click on the event card at position "${sequenceNumber}".`);
+  //   }
+  // }
 
   async verifyBannersOnCard(eventTitle) {
     try {
@@ -106,12 +179,13 @@ class EventsHubPage extends EventsBasePage {
 
 
       if (!backgroundImageUrl || backgroundImageUrl === '') {
+        logger.logError(`Banner not present for event card titled "${eventTitle}"`)
         throw new Error(`Banner for the event card titled "${eventTitle}" does not have a valid background-image URL.`);
       }
-      console.log(`Banner background image URL on the event card titled "${eventTitle}" is: ${backgroundImageUrl}`);
+      logger.logInfo(`Banner background image URL on the event card titled "${eventTitle}" is: ${backgroundImageUrl}`);
 
     } catch (error) {
-      console.error("Banner verification failed:", error.message);
+      logger.logError(`Error occured while banner verification: ${error.message}`);
       throw new Error(`Failed to verify the banner on the event card titled "${eventTitle}".`);
     }
   }
@@ -128,109 +202,20 @@ class EventsHubPage extends EventsBasePage {
 
       const dateAndTimeText = await dateAndTimeElement.textContent();
       if (!dateAndTimeText) {
+        logger.logError("Date and time text is missing or not visible.")
         throw new Error("Date and time text is missing or not visible.");
       }
 
-      const dateTimeRegex = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \| \d{2}:\d{2} (AM|PM) - \d{2}:\d{2} (AM|PM) GMT[+-]\d{1,2}:\d{2}$/;
+      const dateTimeRegex = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \| \d{2}:\d{2} (AM|PM) - \d{2}:\d{2} (AM|PM)/;
       if (!dateTimeRegex.test(dateAndTimeText.trim())) {
-        throw new Error(`Date and time format is incorrect: ${dateAndTimeText}`);
+        logger.logError(`Date and time format is incorrect: ${dateAndTimeText}`)
+        throw new Error(`Date and time format is incorrect`);
       }
 
-      console.log(`Date and time on the event card are displayed correctly: ${dateAndTimeText}`);
+      logger.logInfo(`Date and time on the event card are displayed correctly: ${dateAndTimeText}`);
     } catch (error) {
-      console.error("Date and time verification failed:", error.message);
+      logger.logError(`Error occured while date and time verification : ${error.message}`);
       throw error;
-    }
-  }
-
-  async verifyViewEventButton(eventTitle) {
-    try {
-      const eventCardSelector = this.locators.eventCard(eventTitle);
-      const eventCard = this.native.locator(eventCardSelector);
-
-      await eventCard.waitFor({ state: 'visible' });
-
-      const viewEventLink = eventCard.locator(this.locators.viewEventLink);
-      await viewEventLink.waitFor({ state: 'visible' });
-      await expect(viewEventLink).toBeEnabled();
-
-      console.log(`"View event" button on the event card is clickable.`);
-    } catch (error) {
-      console.error('Verification of "View event" button failed:', error.message);
-      throw error;
-    }
-  }
-
-  // async verifyPaginationControls() {
-  //   try {
-  //     const paginationControls = await this.native.waitForSelector(this.locators.paginationControlsSelector);
-  //     expect(await paginationControls.isVisible()).toBeTruthy();
-  //   } catch (error) {
-  //     console.error("Pagination controls verification failed:", error.message);
-  //     throw new Error("Failed to verify pagination controls.");
-  //   }
-  // }
-
-  async verifyButtonIsClickable(buttonSelector) {
-    try {
-      const button = await this.native.locator(buttonSelector);
-      await button.waitFor({ state: 'visible' });
-      expect(await button.isEnabled()).toBeTruthy();
-      console.log(`The button with selector "${buttonSelector}" is clickable.`);
-    } catch (error) {
-      console.error(`Button with selector "${buttonSelector}" is not clickable:`, error.message);
-      throw new Error(`The button with selector "${buttonSelector}" is not clickable.`);
-    }
-  }
-
-  async verifyPageNumbersClickable() {
-    try {
-      const paginationItems = this.native.locator(`${this.locators.paginationSelector} li button`);
-      const count = await paginationItems.count();
-
-      if (count === 0) {
-        throw new Error(`No pagination buttons found inside ${paginationSelector}.`);
-      }
-
-      console.log(`Found ${count} pagination buttons.`);
-      for (let i = 0; i < count; i++) {
-        const pageButton = paginationItems.nth(i);
-        await pageButton.waitFor({ state: 'visible' });
-        expect(await pageButton.isEnabled()).toBeTruthy();
-        console.log(`Pagination button ${i + 1} is clickable.`);
-      }
-
-    } catch (error) {
-      console.error(`Pagination button verification failed:`, error.message);
-      throw new Error(`Failed to verify pagination buttons.`);
-    }
-  }
-
-  async verifyTotalPagesAndResults() {
-    try {
-
-      //const parentSelector = '.consonant-Pagination-summary';
-      await this.native.waitForSelector(this.locators.paginationSummarySelector);
-
-      const childElement = await this.native.locator(`${this.locators.paginationSummarySelector} > *`);
-      const summaryText = await childElement.textContent();
-
-      const match = summaryText.match(/(\d+)\s*-\s*(\d+)\s*of\s*(\d+)\s*results/);
-
-      if (!match) {
-        throw new Error(`Pagination summary does not match expected format. Found: "${summaryText}".`);
-      }
-
-      const [_, start, end, total] = match.map(Number);
-
-      if (start > end || end > total) {
-        throw new Error(`Pagination summary numbers are out of range. Summary: "${summaryText}".`);
-      }
-
-      console.log(`Pagination summary is correct: ${summaryText}`);
-    } catch (error) {
-      console.error(`Total pages and results verification failed:`, error.message);
-      throw new Error(`Failed to verify total pages and results: ${error.message}`);
     }
   }
 
@@ -244,9 +229,9 @@ class EventsHubPage extends EventsBasePage {
       await eventCard.waitFor({ state: 'visible', timeout: 5000 });
 
       const viewEventLinkSelector = this.locators.viewEventLink;
-      await this.native.waitForSelector(viewEventLinkSelector);  
+      await this.native.waitForSelector(viewEventLinkSelector);
       const viewEventLink = eventCard.locator(viewEventLinkSelector);
-      await viewEventLink.waitFor({ state: 'visible', timeout: 5000 }); 
+      await viewEventLink.waitFor({ state: 'visible', timeout: 5000 });
 
       console.log(`Event Card with title "${eventTitle}" is present`);
 
@@ -259,18 +244,18 @@ class EventsHubPage extends EventsBasePage {
           console.log(`Navigated to ${hrefValue}`);
         } else {
           console.warn(`Href value not found for the link in card "${eventTitle}".`);
+          throw new Error(`Href value not found for the link`);
         }
       } else {
-        console.warn(`Link in card "${eventTitle}" is not clickable.`);
+        logger.logError(`View event link in card "${eventTitle}" is not clickable.`);
+        throw new Error(`View event link in card "${eventTitle}" is not clickable.`);
       }
 
     } catch (error) {
-      console.error(`Failed to view event with title "${eventTitle}":`, error.message);
-      throw new Error(`Could not select or click on the event card with title "${eventTitle}".`);
+      logger.logError(`Error occured while clicking on view event with title "${eventTitle}": ${error.message}`);
+      throw new Error(`Could not click "View event" on event card with title "${eventTitle}".`);
     }
   }
-
-
 
 }
 
